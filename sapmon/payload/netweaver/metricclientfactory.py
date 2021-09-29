@@ -1,6 +1,6 @@
 # Python modules
 from abc import ABC, abstractmethod, abstractproperty
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta,timezone
 from time import time
 import logging
 from typing import Callable, Dict, List, Optional
@@ -94,6 +94,7 @@ class NetWeaverMetricClient(ABC):
     def getQueryWindow(self, 
                        lastRunTime: datetime,
                        minimumRunIntervalSecs: int,
+                       serverTimeZone : timezone,
                        logTag: str) -> tuple:
         pass
 

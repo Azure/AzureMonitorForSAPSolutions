@@ -1,6 +1,7 @@
 # Python modules
 import hashlib
 import json
+import pytz
 import logging
 import re
 import time
@@ -11,6 +12,9 @@ import pandas
 
 # SAP modules
 from pyrfc import Connection, ABAPApplicationError, ABAPRuntimeError, LogonError, CommunicationError
+
+from datetime import datetime as dt
+from dateutil.tz import *
 
 # abstract base class module
 from netweaver.metricclientfactory import NetWeaverMetricClient
@@ -128,10 +132,13 @@ class NetWeaverRfcClient(NetWeaverMetricClient):
     def getQueryWindow(self, 
                        lastRunServerTime: datetime,
                        minimumRunIntervalSecs: int,
+                       serverTimeZone: timezone,
                        logTag: str) -> tuple:
 
+        # add/subtract UTC diff value based on the timezone that was returned
+        hoursInValue = int(serverTimeZone['UTCSIGN']+(serverTimeZone['UTCDIFF']))
         # always start with assumption that query window will work backwards from current system time
-        currentServerTime = self.getServerTime(logTag)
+        currentServerTime = self.getServerTime(hoursInValue, serverTimeZone['TZONE'], logTag)
 
         # usually a query window will end with the current SAP system time and will have a
         # lookback duration of the minimum check run interval (in seconds)
@@ -175,17 +182,29 @@ class NetWeaverRfcClient(NetWeaverMetricClient):
     fetch current sap system time stamp and apply the server timezone (if known)
     so that it be used for timezone aware comparisons against tz-aware timestamps
     """
-    def getServerTime(self,
+    def getServerTime(self,hoursInValue: int, timeZone: tzoffset,
                       logTag: str) -> datetime:
         self.tracer.info("[%s] executing RFC to get SAP server time", logTag)
         with self._getMessageServerConnection() as connection:
             # read current time from SAP NetWeaver.
             timestampResult = self._rfcGetSystemTime(connection, logTag=logTag)
             systemDateTime = self._parseSystemTimeResult(timestampResult)
+            # initialize timzone offset value to tzinfo for the datetime object
+            self.tzinfo = tzoffset(timeZone, hoursInValue)
 
-            systemDateTime = systemDateTime.replace(tzinfo=self.tzinfo)
+            return systemDateTime.replace(tzinfo=self.tzinfo)
+    """
+    fetch  SAP Server time zone and return timezone object
+    """
+    def getLocalTimeZone(self,logTag: str) -> tzinfo:
 
-            return systemDateTime
+        with self._getMessageServerConnection() as connection:
+            self.tracer.info(
+            "[%s] executing RFC /OSP/SYSTEM_TIMEZONE", logTag)
+            rfcName = '/OSP/SYSTEM_TIMEZONE'
+            timeZoneResult = connection.call(rfcName)
+            #return timezone object with UTCDIFF and UTCTimeZone
+            return timeZoneResult['ES_TTZZ']
 
     """
     fetch all /SDF/SMON_ANALYSIS_READ metric data and return as a single json string
@@ -458,8 +477,13 @@ class NetWeaverRfcClient(NetWeaverMetricClient):
         # expect timeStr to have format %H%M%S
         parsedDateTime = datetime.strptime(dateStr + ' ' + timeStr, '%Y%m%d %H%M%S')
         parsedDateTime = parsedDateTime.replace(tzinfo=self.tzinfo)
+        parsedDateTime = parsedDateTime.replace(tzinfo=self.tzinfo)
 
-        return parsedDateTime
+        # apply the timezone offset to sap server time and represent in UTC
+        parsedServerTime = parsedDateTime.now(self.tzinfo)
+        parsedServerTime = parsedServerTime.astimezone(pytz.utc)
+
+        return parsedServerTime
 
     #####
     # private methods to perform two-phase call to first fetch most recent SMON run analysis identifier (guid)
@@ -756,7 +780,11 @@ class NetWeaverRfcClient(NetWeaverMetricClient):
         for record in records:
             # swnc workload metrics are aggregated across the SID, so no need to include hostname/instance/subdomain dimensions
             record['timestamp'] = currentTimestamp
-            record['serverTimestamp'] = queryWindowEnd
+            # apply timezone and offset to utc
+            queryWindowEndServerTime = queryWindowEnd.now(self.tzinfo)
+            queryWindowEndServerTime = queryWindowEndServerTime.astimezone(
+                pytz.utc)
+            record['serverTimestamp'] = queryWindowEndServerTime
             record['SID'] = self.sapSid
             record['client'] = self.sapClient
 
@@ -1271,11 +1299,33 @@ class NetWeaverRfcClient(NetWeaverMetricClient):
     properties needed for metrics records
     """
     def _decorateLockMetrics(self, records: list) -> None:
+        currentTimestamp = datetime.now(timezone.utc)
+        serverRegex = re.compile(r"(?P<hostname>.+?)_(?P<SID>[^_]+)_(?P<instanceNr>[0-9]+)")
         for record in records:
+            # parse GTDATE/GTTIME fields into serverTimestamp
             record['serverTimestamp'] = self._datetimeFromDateAndTimeString(record['GTDATE'], record['GTTIME'])
-            record['SID'] = self.sapSid
-            record['instanceNr'] = record["GTSYSNR"]
-            record['hostname'] = record["GTHOST"].split(".")[0]
+            # value returned by SAP for S4HANA - 's4tsts4dci_S4D_00...............'
+            # value returned by SAP for SQL - 'SAPTSTGTMCI..................'
+            # code to give a consistent format to GTHOST for different values returned by SAP
+            # and use the regex to decorate the table with hostname, SID and InstanceNr
+            actual_hostname = record["GTHOST"].split(".")[0]
+            if(actual_hostname.find(self.sapSid) > 0) :
+                record['GTHOST'] = actual_hostname
+            else:
+                record['GTHOST'] = actual_hostname + "_" + self.sapSid + "_" + record["GTSYSNR"]
+            # parse SERVER field into hostname/SID/InstanceNr properties
+            m = serverRegex.match(record['GTHOST'])
+            if m:
+                fields = m.groupdict()
+                record['hostname'] = fields['hostname']
+                record['SID'] = fields['SID']
+                record['instanceNr'] = fields['instanceNr']
+            else:
+                self.tracer.error("[%s] record had unexpected SERVER format: %s", record['GTSYSNR'])
+                record['hostname'] = ''
+                record['SID'] = ''
+                record['instanceNr'] = ''
+
             record['client'] = self.sapClient
             record['subdomain'] = self.sapSubdomain
-            record['timestamp'] = datetime.now(timezone.utc)
+            record['timestamp'] = currentTimestamp
