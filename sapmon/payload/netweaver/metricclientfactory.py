@@ -1,7 +1,6 @@
 # Python modules
 from abc import ABC, abstractmethod, abstractproperty
-from datetime import date, datetime, timedelta
-from time import time
+from datetime import date, datetime, timedelta,timezone
 import logging
 from typing import Callable, Dict, List, Optional
 
@@ -92,9 +91,11 @@ class NetWeaverMetricClient(ABC):
     # determine appropriate query window start / end time range
     @abstractmethod
     def getQueryWindow(self, 
-                       lastRunTime: datetime,
-                       minimumRunIntervalSecs: int,
-                       logTag: str) -> tuple:
+                        lastRunTime: datetime,
+                        minimumRunIntervalSecs: int,
+                        serverTimeZone : timezone,
+                        logTag: str) -> tuple:
+
         pass
 
     # query sap instance to get current server time
