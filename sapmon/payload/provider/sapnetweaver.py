@@ -388,6 +388,7 @@ class sapNetweaverProviderInstance(ProviderInstance):
     if customer provided RFC SDK configuration, then validate that all required properties are specified
     and validate we can establish RFC client connections to APIs we need to call
     """
+
     def _validateRfcClient(self) -> None:
         logTag = "[%s][%s][validation]" % (self.fullName, self.sapSid)
 
@@ -396,7 +397,7 @@ class sapNetweaverProviderInstance(ProviderInstance):
             not self.sapPassword and
             not self.sapClientId and
             not self.sapLogonGroup and
-            not self.sapRfcSdkBlobUrl):
+                not self.sapRfcSdkBlobUrl):
             # customer has not chosen to enable RFC SDK, nothing to validate
             return
 
@@ -405,9 +406,10 @@ class sapNetweaverProviderInstance(ProviderInstance):
             not self.sapPassword or
             not self.sapClientId or
             not self.sapLogonGroup or
-            not self.sapRfcSdkBlobUrl):
+                not self.sapRfcSdkBlobUrl):
             # customer specified only partial set of config properties needed to enable RFC, so fail validation
-            raise Exception("must specify all properties to enable RFC metric collection:  Username, Password, ClientId, LogonGroup and RfcSdkBlobUrl")
+            raise Exception(
+                "must specify all properties to enable RFC metric collection:  Username, Password, ClientId, LogonGroup and RfcSdkBlobUrl")
 
         if (not self.areRfcMetricsEnabled()):
             raise Exception("RFC SDK failed to install and is not usable")
@@ -417,52 +419,60 @@ class sapNetweaverProviderInstance(ProviderInstance):
 
         # update logging prefix with the specific instance details of the client
         sapHostnameStr = "%s|%s" % (client.Hostname, client.InstanceNr)
-        
+
         # initialie timezone data for utc offset fetched from SAP server
-        serverTimeZone = (self.getRfcServerTimeZone())
+        sapServerTimeZone = self.getRfcServerTimeZone()
 
         # get metric query window to lookback 10 minutes to see if any results are available.  If not that probably
         # indicates customer has not enabled SMON on their SAP system
-        self.tracer.info("%s attempting to fetch server timestamp from %s", logTag, sapHostnameStr)
-        (startTime, endTime) = client.getQueryWindow(lastRunServerTime=None, 
+        self.tracer.info(
+            "%s attempting to fetch server timestamp from %s", logTag, sapHostnameStr)
+        (startTime, endTime) = client.getQueryWindow(lastRunServerTime=None,
                                                      minimumRunIntervalSecs=600,
-                                                       serverTimeZone=serverTimeZone,
+                                                     serverTimeZone=sapServerTimeZone,
                                                      logTag=logTag)
 
         # hard-coded list of available RFC methods that correspond to RFC metrics to validate
-        rfcMethodChecks = ['getSmonMetrics', 
-                         'getSwncWorkloadMetrics', 
-                         'getShortDumpsMetrics',
-                         'getSysLogMetrics',
-                         'getFailedUpdatesMetrics',
-                         'getBatchJobMetrics',
-                         'getInboundQueuesMetrics',
-                         'getOutboundQueuesMetrics',
-                         'getEnqueueReadMetrics'
-                         ]                                             
-        
-        rfcMethodParameterChecks = [
-                         'getFailedUpdatesMetrics',
-                         'getInboundQueuesMetrics',
-                         'getOutboundQueuesMetrics'
-                         'getEnqueueReadMetrics'
-                         ]       
+        rfcMethodChecks = ['getSmonMetrics',
+                           'getSwncWorkloadMetrics',
+                           'getShortDumpsMetrics',
+                           'getSysLogMetrics',
+                           'getFailedUpdatesMetrics',
+                           'getBatchJobMetrics',
+                           'getInboundQueuesMetrics',
+                           'getOutboundQueuesMetrics',
+                           'getEnqueueReadMetrics'
+                           ]
 
-        self.tracer.info("%s connecting to sap to validate RFC metrics", logTag)
-       
+        rfcMethodParameterChecks = [
+            'getFailedUpdatesMetrics',
+            'getInboundQueuesMetrics',
+            'getOutboundQueuesMetrics'
+            'getEnqueueReadMetrics'
+        ]
+
+        self.tracer.info(
+            "%s connecting to sap to validate RFC metrics", logTag)
+
         for rfcMetricName in rfcMethodChecks:
             try:
                 method = getattr(client, rfcMetricName)
                 if rfcMetricName in rfcMethodParameterChecks:
-                    self.tracer.info("%s attempting to fetch %s metrics from %s", logTag, rfcMetricName,sapHostnameStr)
+                    self.tracer.info(
+                        "%s attempting to fetch %s metrics from %s", logTag, rfcMetricName, sapHostnameStr)
                     result = method(logTag=logTag)
-                    self.tracer.info("%s successfully queried  %s metrics from %s", logTag,rfcMetricName, sapHostnameStr)
+                    self.tracer.info(
+                        "%s successfully queried  %s metrics from %s", logTag, rfcMetricName, sapHostnameStr)
                 else:
-                    self.tracer.info("%s attempting to fetch %s metrics from %s", logTag,rfcMetricName, sapHostnameStr)
-                    result = method(startDateTime=startTime, endDateTime=endTime, logTag=logTag)
-                    self.tracer.info("%s successfully queried %s metrics from %s", logTag,rfcMetricName, sapHostnameStr)
+                    self.tracer.info(
+                        "%s attempting to fetch %s metrics from %s", logTag, rfcMetricName, sapHostnameStr)
+                    result = method(startDateTime=startTime,
+                                    endDateTime=endTime, logTag=logTag)
+                    self.tracer.info(
+                        "%s successfully queried %s metrics from %s", logTag, rfcMetricName, sapHostnameStr)
             except:
-                    self.tracer.error("%s suppressing errors during validation of RFC method %s ", logTag, rfcMetricName, exc_info=True)
+                self.tracer.error(
+                    "%s suppressing errors during validation of RFC method %s ", logTag, rfcMetricName, exc_info=True)
 
     """
     query SAP SOAP API to return list of all instances in the SID, but if caller specifies that cached results are okay
@@ -832,18 +842,22 @@ class sapNetweaverProviderInstance(ProviderInstance):
     multiple RFC function calls 
     
     """
-    def getRfcServerTimeZone(self) :
+
+    def getRfcServerTimeZone(self):
         logTag = "[%s][%s][ServerTimeZone]" % (self.fullName, self.sapSid)
-        if ( 'SAPServerTimeZone' in self._timeZoneCache ):
+        if ('SAPServerTimeZone' in self._timeZoneCache):
             timeZoneCacheEntry = self._timeZoneCache['SAPServerTimeZone']
             if(timeZoneCacheEntry['expirationDateTime'] > datetime.utcnow()):
                 if(timeZoneCacheEntry['tz']):
-                    self.tracer.info("%s Cached server timezone: ", self._timeZoneCache['SAPServerTimeZone']['expirationDateTime'])
+                    self.tracer.info("%s Cached server timezone: ",
+                                     self._timeZoneCache['SAPServerTimeZone']['expirationDateTime'])
                     return (timeZoneCacheEntry['tz'])
-        else :
+        else:
             client = self.getRfcClient(logTag=logTag)
-            self._timeZoneCache['SAPServerTimeZone'] = { 'tz':(client.getLocalTimeZone(logTag=logTag)), 'expirationDateTime': datetime.utcnow() + SERVER_TIMEZONE_CACHE_EXPIRATIION }
-            self.tracer.info("%s Caching Server timezone at: ", self._timeZoneCache['SAPServerTimeZone']['expirationDateTime'])
+            self._timeZoneCache['SAPServerTimeZone'] = {'tz': (client.getLocalTimeZone(
+                logTag=logTag)), 'expirationDateTime': datetime.utcnow() + SERVER_TIMEZONE_CACHE_EXPIRATIION}
+            self.tracer.info("%s Caching Server timezone at: ",
+                             self._timeZoneCache['SAPServerTimeZone']['expirationDateTime'])
         return (self._timeZoneCache['SAPServerTimeZone']['tz'])
 
 ###########################
@@ -1014,13 +1028,13 @@ class sapNetweaverProviderCheck(ProviderCheck):
             # update logging prefix with the specific instance details of the client
             sapHostnameStr = "%s|%s" % (client.Hostname, client.InstanceNr)
             
-             # initialie timezone data for utc offset fetched from SAP server
-            serverTimeZone = (self.providerInstance.getRfcServerTimeZone())
+            # initialie timezone data for utc offset fetched from SAP server
+            sapServerTimeZone = self.providerInstance.getRfcServerTimeZone()
 
             # get metric query window based on our last successful query where results were returned
-            (startTime, endTime) = client.getQueryWindow(lastRunServerTime=self.lastRunServer, 
+            (startTime, endTime) = client.getQueryWindow(lastRunServerTime=self.lastRunServer,
                                                          minimumRunIntervalSecs=self.frequencySecs,
-                                                         serverTimeZone =serverTimeZone,
+                                                         serverTimeZone=sapServerTimeZone,
                                                          logTag=self.logTag)
                                                          
             self.lastResult = client.getSmonMetrics(startDateTime=startTime, endDateTime=endTime, logTag=self.logTag)
@@ -1067,13 +1081,13 @@ class sapNetweaverProviderCheck(ProviderCheck):
             # update logging prefix with the specific instance details of the client
             sapHostnameStr = "%s|%s" % (client.Hostname, client.InstanceNr)
             
-             # initialie timezone data for utc offset fetched from SAP server
-            serverTimeZone = (self.providerInstance.getRfcServerTimeZone())
+            # initialie timezone data for utc offset fetched from SAP server
+            sapServerTimeZone = self.providerInstance.getRfcServerTimeZone()
 
             # get metric query window based on our last successful query where results were returned
-            (startTime, endTime) = client.getQueryWindow(lastRunServerTime=self.lastRunServer, 
+            (startTime, endTime) = client.getQueryWindow(lastRunServerTime=self.lastRunServer,
                                                          minimumRunIntervalSecs=self.frequencySecs,
-                                                         serverTimeZone =serverTimeZone,
+                                                         serverTimeZone=sapServerTimeZone,
                                                          logTag=self.logTag)
 
             self.lastResult = client.getSwncWorkloadMetrics(startDateTime=startTime, endDateTime=endTime, logTag=self.logTag)
@@ -1120,13 +1134,13 @@ class sapNetweaverProviderCheck(ProviderCheck):
             # update logging prefix with the specific instance details of the client
             sapHostnameStr = "%s|%s" % (client.Hostname, client.InstanceNr)
             
-             # initialie timezone data for utc offset fetched from SAP server
-            serverTimeZone = (self.providerInstance.getRfcServerTimeZone())
+            # initialie timezone data for utc offset fetched from SAP server
+            sapServerTimeZone = self.providerInstance.getRfcServerTimeZone()
 
             # get metric query window based on our last successful query where results were returned
-            (startTime, endTime) = client.getQueryWindow(lastRunServerTime=self.lastRunServer, 
+            (startTime, endTime) = client.getQueryWindow(lastRunServerTime=self.lastRunServer,
                                                          minimumRunIntervalSecs=self.frequencySecs,
-                                                         serverTimeZone =serverTimeZone,
+                                                         serverTimeZone=sapServerTimeZone,
                                                          logTag=self.logTag)
 
             self.lastResult = client.getShortDumpsMetrics(startDateTime=startTime, endDateTime=endTime, logTag=self.logTag)
@@ -1173,13 +1187,13 @@ class sapNetweaverProviderCheck(ProviderCheck):
             # update logging prefix with the specific instance details of the client
             sapHostnameStr = "%s|%s" % (client.Hostname, client.InstanceNr)
             
-             # initialie timezone data for utc offset fetched from SAP server
-            serverTimeZone = (self.providerInstance.getRfcServerTimeZone())
+            # initialie timezone data for utc offset fetched from SAP server
+            sapServerTimeZone = self.providerInstance.getRfcServerTimeZone()
 
             # get metric query window based on our last successful query where results were returned
-            (startTime, endTime) = client.getQueryWindow(lastRunServerTime=self.lastRunServer, 
+            (startTime, endTime) = client.getQueryWindow(lastRunServerTime=self.lastRunServer,
                                                          minimumRunIntervalSecs=self.frequencySecs,
-                                                         serverTimeZone =serverTimeZone,
+                                                         serverTimeZone=sapServerTimeZone,
                                                          logTag=self.logTag)
 
             self.lastResult = client.getSysLogMetrics(startDateTime=startTime, endDateTime=endTime, logTag=self.logTag)
@@ -1227,12 +1241,12 @@ class sapNetweaverProviderCheck(ProviderCheck):
             sapHostnameStr = "%s|%s" % (client.Hostname, client.InstanceNr)
             
             # initialie timezone data for utc offset fetched from SAP server
-            serverTimeZone = (self.providerInstance.getRfcServerTimeZone())
+            sapServerTimeZone = self.providerInstance.getRfcServerTimeZone()
 
             # get metric query window based on our last successful query where results were returned
-            (startTime, endTime) = client.getQueryWindow(lastRunServerTime=self.lastRunServer, 
+            (startTime, endTime) = client.getQueryWindow(lastRunServerTime=self.lastRunServer,
                                                          minimumRunIntervalSecs=self.frequencySecs,
-                                                         serverTimeZone =serverTimeZone,
+                                                         serverTimeZone=sapServerTimeZone,
                                                          logTag=self.logTag)
 
             self.lastResult = client.getFailedUpdatesMetrics(logTag=self.logTag)
@@ -1279,13 +1293,13 @@ class sapNetweaverProviderCheck(ProviderCheck):
             # update logging prefix with the specific instance details of the client
             sapHostnameStr = "%s|%s" % (client.Hostname, client.InstanceNr)
             
-             # initialie timezone data for utc offset fetched from SAP server
-            serverTimeZone = (self.providerInstance.getRfcServerTimeZone())
+            # initialie timezone data for utc offset fetched from SAP server
+            sapServerTimeZone = self.providerInstance.getRfcServerTimeZone()
 
             # get metric query window based on our last successful query where results were returned
-            (startTime, endTime) = client.getQueryWindow(lastRunServerTime=self.lastRunServer, 
+            (startTime, endTime) = client.getQueryWindow(lastRunServerTime=self.lastRunServer,
                                                          minimumRunIntervalSecs=self.frequencySecs,
-                                                         serverTimeZone =serverTimeZone,
+                                                         serverTimeZone=sapServerTimeZone,
                                                          logTag=self.logTag)
 
             self.lastResult = client.getBatchJobMetrics(startDateTime=startTime, endDateTime=endTime, logTag=self.logTag)

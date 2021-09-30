@@ -1,6 +1,6 @@
 # Python modules
 from abc import ABC, abstractmethod, abstractproperty
-from datetime import date, datetime, timedelta,timezone
+from datetime import date, datetime, timedelta, timezone
 from time import time
 import logging
 from typing import Callable, Dict, List, Optional
@@ -14,6 +14,8 @@ SOAP_CLIENT_CACHE_EXPIRATIION = timedelta(minutes=10)
 ##########
 # Abstract base class to represent interface for querying Server/System time from SAP system
 ##########
+
+
 class ServerTimeClientBase(ABC):
 
     def __init__(self, tracer: logging.Logger):
@@ -26,6 +28,8 @@ class ServerTimeClientBase(ABC):
 ##########
 # Abstract base class to represent interface for SAPStartSvc SOAP API metric extraction client implementation
 ##########
+
+
 class NetWeaverSoapClientBase(ABC):
 
     def __init__(self, tracer: logging.Logger):
@@ -69,10 +73,12 @@ class NetWeaverSoapClientBase(ABC):
 ##########
 # Abstract base class to represent interface for SAP NetWeaver SMON and SWNC Workload metric extraction client implementations
 ##########
+
+
 class NetWeaverMetricClient(ABC):
     #__metaclass__ = ABCMeta
 
-    def __init__(self, 
+    def __init__(self,
                  tracer: logging.Logger):
         self.tracer = tracer
 
@@ -83,7 +89,7 @@ class NetWeaverMetricClient(ABC):
     @abstractproperty
     def InstanceNr(self) -> str:
         pass
-    
+
     # validate that config settings and that client can establish connection
     @abstractmethod
     def validate(self) -> bool:
@@ -91,10 +97,10 @@ class NetWeaverMetricClient(ABC):
 
     # determine appropriate query window start / end time range
     @abstractmethod
-    def getQueryWindow(self, 
+    def getQueryWindow(self,
                        lastRunTime: datetime,
                        minimumRunIntervalSecs: int,
-                       serverTimeZone : timezone,
+                       serverTimeZone: timezone,
                        logTag: str) -> tuple:
         pass
 
@@ -127,7 +133,7 @@ class NetWeaverMetricClient(ABC):
     @abstractmethod
     def getFailedUpdatesMetrics(self, logTag: str) -> str:
         pass
-    
+
     # fetch  BAPI_XBP_JOB_SELECT metrics and return as json string
     @abstractmethod
     def getBatchJobMetrics(self, startDateTime: datetime, endDateTime: datetime, logTag: str) -> str:
@@ -151,15 +157,17 @@ class NetWeaverMetricClient(ABC):
 ##########
 # helper class to instantiate SAP NetWeaver Metric clients while only requiring clients to be aware of interface
 ##########
+
+
 class MetricClientFactory:
 
-    # static class variable to keep cache of all successfully initialized SOAP metric clients 
+    # static class variable to keep cache of all successfully initialized SOAP metric clients
     # using a lookup key of the WSDL url.
-    _soapClientCache= {}
+    _soapClientCache = {}
 
     @staticmethod
-    def getMetricClient(tracer: logging.Logger, 
-                        logTag: str, 
+    def getMetricClient(tracer: logging.Logger,
+                        logTag: str,
                         sapHostName: str,
                         sapSubdomain: str,
                         sapSysNr: str,
@@ -185,10 +193,12 @@ class MetricClientFactory:
                                       columnFilterList=columnFilterList,
                                       serverTimeZone=serverTimeZone)
         except ImportError as importEx:
-            tracer.error("[%s] failed to import pyrfc module, unable to initialize NetWeaverRfcClient: ", logTag, importEx, exc_info=True)
+            tracer.error("[%s] failed to import pyrfc module, unable to initialize NetWeaverRfcClient: ",
+                         logTag, importEx, exc_info=True)
             raise
         except Exception as ex:
-            tracer.error("[%s] Unexpected failure trying to create NetWeaverRfcClient: ", logTag, ex, exc_info=True)
+            tracer.error(
+                "[%s] Unexpected failure trying to create NetWeaverRfcClient: ", logTag, ex, exc_info=True)
             raise
 
     """
@@ -198,23 +208,26 @@ class MetricClientFactory:
     """
     @staticmethod
     def getSoapMetricClientForSapInstance(tracer: logging.Logger,
-                                          logTag: str, 
+                                          logTag: str,
                                           sapSid: str,
-                                          sapHostName: str, 
+                                          sapHostName: str,
                                           sapSubdomain: str,
                                           sapInstanceNr: str,
                                           useCache: bool = True) -> NetWeaverSoapClientBase:
         from netweaver.soapclient import NetWeaverSoapClient
 
-        fqdn = NetWeaverSoapClient._getFullyQualifiedDomainName(sapHostName, sapSubdomain)
+        fqdn = NetWeaverSoapClient._getFullyQualifiedDomainName(
+            sapHostName, sapSubdomain)
 
-        httpsPort = int(NetWeaverSoapClient._getHttpsPortFromInstanceNr(sapInstanceNr))
-        httpPort = int(NetWeaverSoapClient._getHttpPortFromInstanceNr(sapInstanceNr))
+        httpsPort = int(
+            NetWeaverSoapClient._getHttpsPortFromInstanceNr(sapInstanceNr))
+        httpPort = int(
+            NetWeaverSoapClient._getHttpPortFromInstanceNr(sapInstanceNr))
 
-        httpProtocolAndPorts = [(httpsPort,"https"),(httpPort,"http")]
+        httpProtocolAndPorts = [(httpsPort, "https"), (httpPort, "http")]
         lastException = None
         startTime = time()
-        for httpPort,httpProtocol in httpProtocolAndPorts:
+        for httpPort, httpProtocol in httpProtocolAndPorts:
             try:
                 # try to create SOAP client for specific host + port + http Protocol,
                 # and use a cached client instance if one already exists
@@ -231,7 +244,7 @@ class MetricClientFactory:
                 # save last exception in the event we fail to create client on all ports/protocols and we want to throw
                 lastException = ex
 
-        tracer.error("%s Failed to create NetWeaverSoapClient on default ports for host=%s, instanceNr=%s [%d ms]", 
+        tracer.error("%s Failed to create NetWeaverSoapClient on default ports for host=%s, instanceNr=%s [%d ms]",
                      logTag, fqdn, sapInstanceNr, TimeUtils.getElapsedMilliseconds(startTime))
         raise lastException
 
@@ -246,16 +259,17 @@ class MetricClientFactory:
     """
     @staticmethod
     def getSoapMetricClientForHostAndPort(tracer: logging.Logger,
-                                          logTag: str, 
+                                          logTag: str,
                                           sapSid: str,
-                                          sapHostName: str, 
+                                          sapHostName: str,
                                           sapSubdomain: str,
                                           httpProtocol: str,
                                           httpPort: int,
                                           useCache: bool = True) -> NetWeaverSoapClientBase:
         from netweaver.soapclient import NetWeaverSoapClient
 
-        wsdl = NetWeaverSoapClient._getFullyQualifiedWsdl(sapHostName, sapSubdomain, httpProtocol, httpPort)
+        wsdl = NetWeaverSoapClient._getFullyQualifiedWsdl(
+            sapHostName, sapSubdomain, httpProtocol, httpPort)
 
         # see if we have SOAP client we can use for this specific hostname + port, since instantiating
         # a new SOAP client involves making off box call to fetch WSDL so we try to avoid doing that more often than needed
@@ -268,7 +282,8 @@ class MetricClientFactory:
                     return cacheEntry['client']
                 else:
                     # cached soap client was not initialized successfully, so throw
-                    raise Exception("%s cached NetWeaverSoapClient failure for wsdl: %s", logTag, wsdl)
+                    raise Exception(
+                        "%s cached NetWeaverSoapClient failure for wsdl: %s", logTag, wsdl)
 
         # no valid cached client was found, so try to fetch WSDL for this specific host and port
         startTime = time()
@@ -283,28 +298,28 @@ class MetricClientFactory:
                                          httpPort=httpPort)
 
             tracer.info("%s success initializing NetWeaverSoapClient for wsdl: %s [%d ms]",
-                         logTag, wsdl, TimeUtils.getElapsedMilliseconds(startTime))
+                        logTag, wsdl, TimeUtils.getElapsedMilliseconds(startTime))
             return client
         except Exception as ex:
-            tracer.error("%s error initializing NetWeaverSoapClient for wsdl: %s, [%d ms] %s", 
+            tracer.error("%s error initializing NetWeaverSoapClient for wsdl: %s, [%d ms] %s",
                          logTag, wsdl, TimeUtils.getElapsedMilliseconds(startTime), ex, exc_info=True)
             raise
         finally:
             # cache soap client result, whether success or failure
-            MetricClientFactory._soapClientCache[wsdl] = { 
-                                                            'client': client, 
-                                                            'expirationDateTime': datetime.utcnow() + SOAP_CLIENT_CACHE_EXPIRATIION 
-                                                         }
-            
+            MetricClientFactory._soapClientCache[wsdl] = {
+                'client': client,
+                'expirationDateTime': datetime.utcnow() + SOAP_CLIENT_CACHE_EXPIRATIION
+            }
+
     """
     factory method to create a SAP Server Time client based on Message Server HTTP client implementation
     NOTE:  no client object caching needed since instantiating the client is cheap, unlike the SOAP client
     """
     @staticmethod
     def getMessageServerClientForSapInstance(tracer: logging.Logger,
-                                             logTag: str, 
+                                             logTag: str,
                                              sapSid: str,
-                                             sapHostName: str, 
+                                             sapHostName: str,
                                              sapSubdomain: str,
                                              sapInstanceNr: str) -> ServerTimeClientBase:
         try:
@@ -317,11 +332,11 @@ class MetricClientFactory:
                                            sapSubdomain=sapSubdomain,
                                            sapInstanceNr=sapInstanceNr)
         except Exception as ex:
-            tracer.error("%s Unexpected failure trying to create MessageServerHttpClient for host:%s, subdomain:%s, instance:%s, %s", 
-                         logTag, 
+            tracer.error("%s Unexpected failure trying to create MessageServerHttpClient for host:%s, subdomain:%s, instance:%s, %s",
+                         logTag,
                          sapHostName,
                          sapSubdomain,
                          sapInstanceNr,
-                         ex, 
+                         ex,
                          exc_info=True)
             raise
