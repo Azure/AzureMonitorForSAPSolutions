@@ -138,14 +138,8 @@ class NetWeaverRfcClient(NetWeaverMetricClient):
                        minimumRunIntervalSecs: int,
                        serverTimeZone: timezone,
                        logTag: str) -> tuple:
-
-        # add/subtract UTC diff value based on the timezone that was returned
-        hoursInValue = int(
-            serverTimeZone['UTCSIGN']+(serverTimeZone['UTCDIFF']))
         # always start with assumption that query window will work backwards from current system time
-        currentServerTime = self.getServerTime(
-            hoursInValue, serverTimeZone['TZONE'], logTag)
-
+        currentServerTime = self.getServerTime(serverTimeZone, logTag)
         # usually a query window will end with the current SAP system time and will have a
         # lookback duration of the minimum check run interval (in seconds)
         # Since SAP requirement is that start and end time must occur on the same calendar day,
@@ -193,29 +187,35 @@ class NetWeaverRfcClient(NetWeaverMetricClient):
     so that it be used for timezone aware comparisons against tz-aware timestamps
     """
 
-    def getServerTime(self, hoursInValue: int, timeZone: tzoffset, logTag: str) -> datetime:
+    def getServerTime(self, sapServerTimeZone: timezone, logTag: str) -> datetime:
         self.tracer.info("[%s] executing RFC to get SAP server time", logTag)
         with self._getMessageServerConnection() as connection:
             # read current time from SAP NetWeaver.
             timestampResult = self._rfcGetSystemTime(connection, logTag=logTag)
             systemDateTime = self._parseSystemTimeResult(timestampResult)
             # initialize timzone offset value to tzinfo for the datetime object
-            self.tzinfo = tzoffset(timeZone, hoursInValue)
+            if(sapServerTimeZone != None):
+                self.tzinfo = tzoffset(sapServerTimeZone['TZONE'], int(
+                sapServerTimeZone['UTCSIGN']+(sapServerTimeZone['UTCDIFF'])))
+        return systemDateTime.replace(tzinfo=self.tzinfo)
 
-            return systemDateTime.replace(tzinfo=self.tzinfo)
     """
     fetch  SAP Server time zone and return timezone object
     """
 
     def getLocalTimeZone(self, logTag: str) -> tzinfo:
-
+        timeZoneResult = None
         with self._getMessageServerConnection() as connection:
             self.tracer.info(
                 "[%s] executing RFC /OSP/SYSTEM_TIMEZONE", logTag)
-            rfcName = '/OSP/SYSTEM_TIMEZONE'
-            timeZoneResult = connection.call(rfcName)
-            #return timezone object with UTCDIFF and UTCTimeZone
-            return timeZoneResult['ES_TTZZ']
+            try:
+                rfcName = '/OSP/SYSTEM_TIMEZONE'
+                timeZoneResult = connection.call(rfcName)
+            #return timezone object with UTCDIFF, UTCSIGN and TimeZone
+            except Exception as e:
+                self.tracer.error("[%s] Error occured for rfc %s with hostname: %s (%s)",
+                                  logTag, rfcName, self.sapHostName, e, exc_info=True)
+        return timeZoneResult
 
     """
     fetch all /SDF/SMON_ANALYSIS_READ metric data and return as a single json string
@@ -531,8 +531,6 @@ class NetWeaverRfcClient(NetWeaverMetricClient):
         parsedDateTime = datetime.strptime(
             dateStr + ' ' + timeStr, '%Y%m%d %H%M%S')
         parsedDateTime = parsedDateTime.replace(tzinfo=self.tzinfo)
-        parsedDateTime = parsedDateTime.replace(tzinfo=self.tzinfo)
-
         # apply the timezone offset to sap server time and represent in UTC
         parsedServerTime = parsedDateTime.now(self.tzinfo)
         parsedServerTime = parsedServerTime.astimezone(pytz.utc)

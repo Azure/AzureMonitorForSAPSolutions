@@ -15,7 +15,6 @@ SOAP_CLIENT_CACHE_EXPIRATIION = timedelta(minutes=10)
 # Abstract base class to represent interface for querying Server/System time from SAP system
 ##########
 
-
 class ServerTimeClientBase(ABC):
 
     def __init__(self, tracer: logging.Logger):
@@ -28,7 +27,6 @@ class ServerTimeClientBase(ABC):
 ##########
 # Abstract base class to represent interface for SAPStartSvc SOAP API metric extraction client implementation
 ##########
-
 
 class NetWeaverSoapClientBase(ABC):
 
@@ -73,7 +71,6 @@ class NetWeaverSoapClientBase(ABC):
 ##########
 # Abstract base class to represent interface for SAP NetWeaver SMON and SWNC Workload metric extraction client implementations
 ##########
-
 
 class NetWeaverMetricClient(ABC):
     #__metaclass__ = ABCMeta

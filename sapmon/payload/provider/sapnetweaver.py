@@ -61,7 +61,7 @@ class sapNetweaverProviderInstance(ProviderInstance):
         self._soapClientCache = {}
 
         # cache timezone so we can re-use them until the cache expiration time in the same process
-        self._timeZoneCache = {}
+        self._timeZoneCache = {'timeZone':None}
         # the RFC SDK does not allow client to specify a timeout and in fact appears to have a connection timeout of 60 secs. 
         # In cases where RFC calls timeout due to some misconfiguration, multiple retries can lead to metric gaps of several minutes.  
         # We are limiting retries here because it is extremely rare for SOAP or RFC call to fail on first attempt and succeed on retry,
@@ -170,11 +170,11 @@ class sapNetweaverProviderInstance(ProviderInstance):
         self.initContent()
 
         try:
-            self._validateSoapClient()
+           self._validateSoapClient()
         except Exception as e:
             self.tracer.error("%s SOAP API validation failure: %s", logTag, e, exc_info=True)
             return False
-
+       
         try:
             self._validateRfcClient()
         except Exception as e:
@@ -388,7 +388,6 @@ class sapNetweaverProviderInstance(ProviderInstance):
     if customer provided RFC SDK configuration, then validate that all required properties are specified
     and validate we can establish RFC client connections to APIs we need to call
     """
-
     def _validateRfcClient(self) -> None:
         logTag = "[%s][%s][validation]" % (self.fullName, self.sapSid)
 
@@ -443,20 +442,20 @@ class sapNetweaverProviderInstance(ProviderInstance):
                            'getOutboundQueuesMetrics',
                            'getEnqueueReadMetrics'
                            ]
-
-        rfcMethodParameterChecks = [
+        # set with method names with single parameter
+        rfcMethodParameterChecks = {
             'getFailedUpdatesMetrics',
             'getInboundQueuesMetrics',
-            'getOutboundQueuesMetrics'
+            'getOutboundQueuesMetrics',
             'getEnqueueReadMetrics'
-        ]
+        }
 
-        self.tracer.info(
-            "%s connecting to sap to validate RFC metrics", logTag)
+        self.tracer.info("%s connecting to sap to validate RFC metrics", logTag)
 
         for rfcMetricName in rfcMethodChecks:
             try:
                 method = getattr(client, rfcMetricName)
+                # check for methods with single parameter
                 if rfcMetricName in rfcMethodParameterChecks:
                     self.tracer.info(
                         "%s attempting to fetch %s metrics from %s", logTag, rfcMetricName, sapHostnameStr)
@@ -464,16 +463,17 @@ class sapNetweaverProviderInstance(ProviderInstance):
                     self.tracer.info(
                         "%s successfully queried  %s metrics from %s", logTag, rfcMetricName, sapHostnameStr)
                 else:
+                    # process methods with three parameters
                     self.tracer.info(
                         "%s attempting to fetch %s metrics from %s", logTag, rfcMetricName, sapHostnameStr)
                     result = method(startDateTime=startTime,
                                     endDateTime=endTime, logTag=logTag)
                     self.tracer.info(
                         "%s successfully queried %s metrics from %s", logTag, rfcMetricName, sapHostnameStr)
-            except:
+            except Exception as e:
                 self.tracer.error(
-                    "%s suppressing errors during validation of RFC method %s ", logTag, rfcMetricName, exc_info=True)
-
+                    "[%s]-[%s] suppressing errors during validation of RFC method %s ", logTag, e, rfcMetricName, exc_info=True)
+ 
     """
     query SAP SOAP API to return list of all instances in the SID, but if caller specifies that cached results are okay
     and we have cached instance list with the provider instance, then just return the cached results
@@ -845,20 +845,25 @@ class sapNetweaverProviderInstance(ProviderInstance):
 
     def getRfcServerTimeZone(self):
         logTag = "[%s][%s][ServerTimeZone]" % (self.fullName, self.sapSid)
-        if ('SAPServerTimeZone' in self._timeZoneCache):
-            timeZoneCacheEntry = self._timeZoneCache['SAPServerTimeZone']
-            if(timeZoneCacheEntry['expirationDateTime'] > datetime.utcnow()):
-                if(timeZoneCacheEntry['tz']):
-                    self.tracer.info("%s Cached server timezone: ",
-                                     self._timeZoneCache['SAPServerTimeZone']['expirationDateTime'])
-                    return (timeZoneCacheEntry['tz'])
+        # check if cache dictionary has values initialized and  return the timezone
+
+        if(self._timeZoneCache['timeZone'] != None and self._timeZoneCache['expirationDateTime'] > datetime.utcnow()):
+            self.tracer.info("%s Return cached server timezone: ",
+                               self._timeZoneCache['expirationDateTime'])
+            return (self._timeZoneCache['timeZone'])
         else:
+            # initialize timezone variables and cache expiration in a dictionary
             client = self.getRfcClient(logTag=logTag)
-            self._timeZoneCache['SAPServerTimeZone'] = {'tz': (client.getLocalTimeZone(
-                logTag=logTag)), 'expirationDateTime': datetime.utcnow() + SERVER_TIMEZONE_CACHE_EXPIRATIION}
-            self.tracer.info("%s Caching Server timezone at: ",
-                             self._timeZoneCache['SAPServerTimeZone']['expirationDateTime'])
-        return (self._timeZoneCache['SAPServerTimeZone']['tz'])
+            sapServerTimeZone = client.getLocalTimeZone(logTag=logTag)
+            if sapServerTimeZone != None:
+                    self._timeZoneCache['timeZone'] = sapServerTimeZone['ES_TTZZ']
+                    self._timeZoneCache['expirationDateTime'] = datetime.utcnow(
+                    ) + SERVER_TIMEZONE_CACHE_EXPIRATIION
+                    self.tracer.info("%s Caching Server timezone at: ",
+                                     self._timeZoneCache['expirationDateTime'])
+            else:
+                    self._timeZoneCache['timeZone'] = None
+        return self._timeZoneCache['timeZone']
 
 ###########################
 class sapNetweaverProviderCheck(ProviderCheck):
