@@ -174,7 +174,6 @@ class sapNetweaverProviderInstance(ProviderInstance):
         except Exception as e:
             self.tracer.error("%s SOAP API validation failure: %s", logTag, e, exc_info=True)
             return False
-       
         try:
             self._validateRfcClient()
         except Exception as e:
@@ -463,7 +462,7 @@ class sapNetweaverProviderInstance(ProviderInstance):
                     self.tracer.info(
                         "%s successfully queried  %s metrics from %s", logTag, rfcMetricName, sapHostnameStr)
                 else:
-                    # process methods with three parameters
+                    # methods with three parameters
                     self.tracer.info(
                         "%s attempting to fetch %s metrics from %s", logTag, rfcMetricName, sapHostnameStr)
                     result = method(startDateTime=startTime,
@@ -846,7 +845,6 @@ class sapNetweaverProviderInstance(ProviderInstance):
     def getRfcServerTimeZone(self):
         logTag = "[%s][%s][ServerTimeZone]" % (self.fullName, self.sapSid)
         # check if cache dictionary has values initialized and  return the timezone
-
         if(self._timeZoneCache['timeZone'] != None and self._timeZoneCache['expirationDateTime'] > datetime.utcnow()):
             self.tracer.info("%s Return cached server timezone: ",
                                self._timeZoneCache['expirationDateTime'])
