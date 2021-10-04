@@ -3,7 +3,7 @@
         {
             "name": "GetSystemInstanceList",
             "description": "SAP Netweaver GetSystemInstanceList",
-            "customLog": "SapNetweaver_GetSystemInstanceList_kk",
+            "customLog": "SapNetweaver_GetSystemInstanceList",
             "frequencySecs": 60,
             "includeInCustomerAnalytics": true,
             "actions": [
@@ -15,7 +15,7 @@
         {
             "name": "GetProcessList",
             "description": "SAP Netweaver GetProcessList",
-            "customLog": "SapNetweaver_GetProcessList_kk",
+            "customLog": "SapNetweaver_GetProcessList",
             "frequencySecs": 60,
             "includeInCustomerAnalytics": true,
             "actions": [
@@ -32,10 +32,9 @@
         {
             "name": "ABAPGetWPTable",
             "description": "SAP Netweaver ABAPGetWPTable",
-            "customLog": "SapNetweaver_ABAPGetWPTable_kk",
+            "customLog": "SapNetweaver_ABAPGetWPTable",
             "frequencySecs": 60,
             "includeInCustomerAnalytics": false,
-            "enabled":true,
             "actions": [
                 {
                     "type": "ABAPGetWPTable",
@@ -50,10 +49,9 @@
         {
             "name": "GetQueueStatistic",
             "description": "SAP Netweaver GetQueueStatistic",
-            "customLog": "SapNetweaver_GetQueueStatistic_kk",
+            "customLog": "SapNetweaver_GetQueueStatistic",
             "frequencySecs": 60,
             "includeInCustomerAnalytics": true,
-            "enabled":true,
             "actions": [
                 {
                     "type": "GetQueueStatistic",
@@ -68,10 +66,9 @@
         {
             "name": "EnqGetStatistic",
             "description": "SAP Netweaver EnqGetStatistic",
-            "customLog": "SapNetweaver_EnqGetStatistic_kk",
+            "customLog": "SapNetweaver_EnqGetStatistic",
             "frequencySecs": 60,
             "includeInCustomerAnalytics": true,
-            "enabled":false,
             "actions": [
                 {
                     "type": "EnqGetStatistic",
@@ -86,10 +83,9 @@
         {
             "name": "SMON_Metrics",
             "description": "SAP Netweaver SMON",
-            "customLog": "SapNetweaver_SMON_kk",
+            "customLog": "SapNetweaver_SMON",
             "frequencySecs": 60,
             "includeInCustomerAnalytics": true,
-            "enabled":true,
             "actions": [
                 {
                     "type": "GetSmonAnalysisMetrics",
@@ -100,10 +96,9 @@
         {
             "name": "SWNC_Workload_Metrics",
             "description": "SAP Netweaver SWNC",
-            "customLog": "SapNetweaver_SWNC_kk",
+            "customLog": "SapNetweaver_SWNC",
             "frequencySecs": 300,
             "includeInCustomerAnalytics": true,
-            "enabled":true,
             "actions": [
                 {
                     "type": "GetSwncWorkloadMetrics",
@@ -114,10 +109,9 @@
         {
             "name": "SDF_Short_Dumps_Metrics",
             "description": "SAP Netweaver Short Dumps",
-            "customLog": "SapNetweaver_ShortDumps_kk",
+            "customLog": "SapNetweaver_ShortDumps",
             "frequencySecs": 300,
             "includeInCustomerAnalytics": false,
-            "enabled":true,
             "actions": [
                 {
                     "type": "GetShortDumpsMetrics",
@@ -128,10 +122,9 @@
         {
             "name": "Sys_Log_Metrics",
             "description": "SAP Netweaver Sys Logs",
-            "customLog": "SapNetweaver_SysLogs_kk",
+            "customLog": "SapNetweaver_SysLogs",
             "frequencySecs": 300,
             "includeInCustomerAnalytics": false,
-            "enabled":true,
             "actions": [
                 {
                     "type": "GetSysLogMetrics",
@@ -142,10 +135,9 @@
         {
             "name": "Failed_Updates_Metrics",
             "description": "SAP Netweaver Failed Updates",
-            "customLog": "SapNetweaver_FailedUpdates_kk",
+            "customLog": "SapNetweaver_FailedUpdates",
             "frequencySecs": 60,
             "includeInCustomerAnalytics": false,
-            "enabled":true,
             "actions": [
                 {
                     "type": "GetFailedUpdatesMetrics",
@@ -156,10 +148,9 @@
         {
             "name": "Batch_Jobs_Metrics",
             "description": "SAP Netweaver Batch Jobs Logs",
-            "customLog": "SapNetweaver_BatchJobs_kk",
+            "customLog": "SapNetweaver_BatchJobs",
             "frequencySecs": 300,
             "includeInCustomerAnalytics": false,
-            "enabled":true,
             "actions": [
                 {
                     "type": "GetBatchJobMetrics",
@@ -170,10 +161,9 @@
         {
             "name": "Inbound_Queues_Metrics",
             "description": "SAP Netweaver Current Inbound Queues",
-            "customLog": "SapNetweaver_InboundQueues_kk",
+            "customLog": "SapNetweaver_InboundQueues",
             "frequencySecs": 60,
             "includeInCustomerAnalytics": false,
-            "enabled":true,
             "actions": [
                 {
                     "type": "GetInboundQueuesMetrics",
@@ -184,10 +174,9 @@
         {
             "name": "Outbound_Queues_Metrics",
             "description": "SAP Netweaver Current Outbound Queues",
-            "customLog": "SapNetweaver_OutboundQueues_kk",
+            "customLog": "SapNetweaver_OutboundQueues",
             "frequencySecs": 60,
             "includeInCustomerAnalytics": false,
-            "enabled":true,
             "actions": [
                 {
                     "type": "GetOutboundQueuesMetrics",
@@ -198,16 +187,15 @@
         {
             "name": "Enqueue_Read_Metrics",
             "description": "SAP Netweaver Enqueue Read Lock Entries",
-            "customLog": "SapNetweaver_EnqueueRead_kk",
+            "customLog": "SapNetweaver_EnqueueRead",
             "frequencySecs": 60,
             "includeInCustomerAnalytics": false,
-            "enabled":true,
             "actions": [
                 {
                     "type": "GetEnqueueReadMetrics",
                     "parameters": { }
                 }
             ]
-        }       
+        }
     ]
 }
