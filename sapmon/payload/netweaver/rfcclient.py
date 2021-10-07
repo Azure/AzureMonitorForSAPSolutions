@@ -6,6 +6,7 @@ import logging
 import re
 import time
 from datetime import datetime, date, timedelta, time, tzinfo, timezone
+from dateutil import tz as dateutil_tz
 from pandas import DataFrame
 from typing import Dict, List
 import pandas
@@ -139,6 +140,7 @@ class NetWeaverRfcClient(NetWeaverMetricClient):
                        serverTimeZone: timezone,
                        logTag: str) -> tuple:
         # always start with assumption that query window will work backwards from current system time
+        # pass serverTimeZone to calculate UTCOffset based on time zone
         currentServerTime = self.getServerTime(serverTimeZone, logTag)
         # usually a query window will end with the current SAP system time and will have a
         # lookback duration of the minimum check run interval (in seconds)
@@ -193,10 +195,22 @@ class NetWeaverRfcClient(NetWeaverMetricClient):
             # read current time from SAP NetWeaver.
             timestampResult = self._rfcGetSystemTime(connection, logTag=logTag)
             systemDateTime = self._parseSystemTimeResult(timestampResult)
-            # initialize timzone offset value to tzinfo for the datetime object
+
+            # calculate offset difference by subtratcing dst( daylight savings) difference to the UTC difference value
             if(sapServerTimeZone != None):
-                self.tzinfo = tzoffset(sapServerTimeZone['TZONE'], int(
-                sapServerTimeZone['UTCSIGN']+(sapServerTimeZone['UTCDIFF'])))
+                utcOffset = str((sapServerTimeZone['UTCSIGN']) +
+                                    str(int(sapServerTimeZone['UTCDIFF'])-int(sapServerTimeZone['DSTDIFF'])))
+           
+            # check if offset is single digit hour then concatinate '0' for UTC difference 
+            # so that string length can be maintianed both for single hour and double digit hour for final seconds calculation for timedelta 
+                if(sapServerTimeZone['UTCDIFF'][0:1] == '0'):
+                    utcDiff = '0'+utcOffset[1:2]+utcOffset[2:4]+utcOffset[4:6]
+                else:
+                    utcDiff = utcOffset[0:2]+utcOffset[2:4]+utcOffset[4:6]
+            # initialize timzone offset value to tzinfo for the datetime object
+                self.tzinfo = timezone(timedelta(hours=int(str('-'+utcDiff[0:2])) if(sapServerTimeZone['UTCSIGN'] == '+') else int(
+                    utcDiff[0:2]), minutes=int(utcDiff[2:4]), seconds=int(utcDiff[4:6])))
+
         return systemDateTime.replace(tzinfo=self.tzinfo)
 
     """
@@ -398,7 +412,7 @@ class NetWeaverRfcClient(NetWeaverMetricClient):
     fetch object lock metrics from ENQUEUE_READ data and return as json string
     """
 
-    def getEnqueueReadMetrics(self, logTag: str) -> str:
+    def getEnqueueReadMetrics(self, logTag: str, serverTimeZone: timezone) -> str:
         self.tracer.info("[%s] executing RFC ENQUEUE_READ check", logTag)
         rfcName = "ENQUEUE_READ"
         parsedResult = []
@@ -408,6 +422,9 @@ class NetWeaverRfcClient(NetWeaverMetricClient):
             if snapshotResult != None:
                 parsedResult = self._parseQueuesAndLockSnapshotResult(
                     rfcName, snapshotResult, "ENQ")
+                # initialize self.tzinfo     
+                self.getServerTime(serverTimeZone, logTag)    
+                
                 self._decorateLockMetrics(parsedResult)
 
             return parsedResult
@@ -530,12 +547,18 @@ class NetWeaverRfcClient(NetWeaverMetricClient):
         # expect timeStr to have format %H%M%S
         parsedDateTime = datetime.strptime(
             dateStr + ' ' + timeStr, '%Y%m%d %H%M%S')
-        parsedDateTime = parsedDateTime.replace(tzinfo=self.tzinfo)
-        # apply the timezone offset to sap server time and represent in UTC
-        parsedServerTime = parsedDateTime.now(self.tzinfo)
-        parsedServerTime = parsedServerTime.astimezone(pytz.utc)
-
-        return parsedServerTime
+      
+        # get UTCOffset for parsedDateTime(SAP servertime)
+        # initialize parsedDateTime by extending timezone with UTC   
+        parsedServerDateTime = parsedDateTime.replace(tzinfo=tzoffset("UTC+0",0))
+       
+       # apply time zone offset with timedelta in seconds saved in self.tzinfo
+        if(self.tzinfo != None):
+            sapServerUTCDateTime = parsedServerDateTime.astimezone(tzoffset("UTC",self.tzinfo.utcoffset(None)))
+        else:
+            return parsedServerDateTime
+        return sapServerUTCDateTime
+      
 
     #####
     # private methods to perform two-phase call to first fetch most recent SMON run analysis identifier (guid)
@@ -858,9 +881,15 @@ class NetWeaverRfcClient(NetWeaverMetricClient):
             # swnc workload metrics are aggregated across the SID, so no need to include hostname/instance/subdomain dimensions
             record['timestamp'] = currentTimestamp
             # apply timezone and offset to utc
-            queryWindowEndServerTime = queryWindowEnd.now(self.tzinfo)
-            queryWindowEndServerTime = queryWindowEndServerTime.astimezone(pytz.utc)
-            record['serverTimestamp'] = queryWindowEndServerTime
+            # get UTCOffset for parsedDateTime(SAP servertime)
+            # initialize parsedDateTime by applying UTC timezone
+            if(self.tzinfo != None):
+                queryWindowEndServerTime = queryWindowEnd.replace(tzinfo=tzoffset("UTC+0", 0))
+                # apply time zone offset with timedelta in seconds saved in self.tzinfo
+                queryWindowEndUTCDateTime = queryWindowEndServerTime.astimezone(tzoffset("UTC", self.tzinfo.utcoffset(None)))
+                record['serverTimestamp'] = queryWindowEndUTCDateTime
+            else:
+                record['serverTimestamp'] = queryWindowEnd
             record['SID'] = self.sapSid
             record['client'] = self.sapClient
 
@@ -997,7 +1026,7 @@ class NetWeaverRfcClient(NetWeaverMetricClient):
                 record['instanceNr'] = fields['instanceNr']
             else:
                 self.tracer.error(
-                    "[%s] record had unexpected SERVER format: %s", record[tableName])
+                    "record had unexpected SERVER format: %s", record[tableName])
                 record['hostname'] = ''
                 record['SID'] = ''
                 record['instanceNr'] = ''

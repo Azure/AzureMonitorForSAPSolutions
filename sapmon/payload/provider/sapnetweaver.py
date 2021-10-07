@@ -170,10 +170,10 @@ class sapNetweaverProviderInstance(ProviderInstance):
         self.initContent()
 
         try:
-           self._validateSoapClient()
+            self._validateSoapClient()
         except Exception as e:
-            self.tracer.error("%s SOAP API validation failure: %s", logTag, e, exc_info=True)
-            return False
+           self.tracer.error("%s SOAP API validation failure: %s", logTag, e, exc_info=True)
+           return False
         try:
             self._validateRfcClient()
         except Exception as e:
@@ -395,7 +395,7 @@ class sapNetweaverProviderInstance(ProviderInstance):
             not self.sapPassword and
             not self.sapClientId and
             not self.sapLogonGroup and
-                not self.sapRfcSdkBlobUrl):
+            not self.sapRfcSdkBlobUrl):
             # customer has not chosen to enable RFC SDK, nothing to validate
             return
 
@@ -404,7 +404,7 @@ class sapNetweaverProviderInstance(ProviderInstance):
             not self.sapPassword or
             not self.sapClientId or
             not self.sapLogonGroup or
-                not self.sapRfcSdkBlobUrl):
+            not self.sapRfcSdkBlobUrl):
             # customer specified only partial set of config properties needed to enable RFC, so fail validation
             raise Exception(
                 "must specify all properties to enable RFC metric collection:  Username, Password, ClientId, LogonGroup and RfcSdkBlobUrl")
@@ -431,43 +431,34 @@ class sapNetweaverProviderInstance(ProviderInstance):
                                                      logTag=logTag)
 
         # hard-coded list of available RFC methods that correspond to RFC metrics to validate
-        rfcMethodChecks = ['getSmonMetrics',
-                           'getSwncWorkloadMetrics',
-                           'getShortDumpsMetrics',
-                           'getSysLogMetrics',
-                           'getFailedUpdatesMetrics',
-                           'getBatchJobMetrics',
-                           'getInboundQueuesMetrics',
-                           'getOutboundQueuesMetrics',
-                           'getEnqueueReadMetrics'
-                           ]
-        # set with method names with single parameter
-        rfcMethodParameterChecks = {
-            'getFailedUpdatesMetrics',
-            'getInboundQueuesMetrics',
-            'getOutboundQueuesMetrics',
-            'getEnqueueReadMetrics'
+        # hashtable with method names as key and value as number of parameters in every method 
+        # for example value=3 represents method that takes three parametres, and called conditionlly 
+        rfcMethodwithParameterLength = {'getSmonMetrics':3,
+                           'getSwncWorkloadMetrics':3,
+                           'getShortDumpsMetrics':3,
+                           'getSysLogMetrics':3,
+                           'getFailedUpdatesMetrics':1,
+                           'getBatchJobMetrics':3,
+                           'getInboundQueuesMetrics':1,
+                           'getOutboundQueuesMetrics':1,
+                           'getEnqueueReadMetrics':2
         }
-
+       
         self.tracer.info("%s connecting to sap to validate RFC metrics", logTag)
 
-        for rfcMetricName in rfcMethodChecks:
+        for rfcMetricName in rfcMethodwithParameterLength:
             try:
                 method = getattr(client, rfcMetricName)
-                # check for methods with single parameter
-                if rfcMetricName in rfcMethodParameterChecks:
-                    self.tracer.info(
+                self.tracer.info(
                         "%s attempting to fetch %s metrics from %s", logTag, rfcMetricName, sapHostnameStr)
+                # check for methods based on number of parameters
+                if  rfcMethodwithParameterLength.get(rfcMetricName) == 1:
                     result = method(logTag=logTag)
-                    self.tracer.info(
-                        "%s successfully queried  %s metrics from %s", logTag, rfcMetricName, sapHostnameStr)
+                elif rfcMethodwithParameterLength.get(rfcMetricName) == 2: 
+                    result = method(logTag=logTag, serverTimeZone=sapServerTimeZone )
                 else:
-                    # methods with three parameters
-                    self.tracer.info(
-                        "%s attempting to fetch %s metrics from %s", logTag, rfcMetricName, sapHostnameStr)
-                    result = method(startDateTime=startTime,
-                                    endDateTime=endTime, logTag=logTag)
-                    self.tracer.info(
+                    result = method(startDateTime=startTime, endDateTime=endTime, logTag=logTag)
+                self.tracer.info(
                         "%s successfully queried %s metrics from %s", logTag, rfcMetricName, sapHostnameStr)
             except Exception as e:
                 self.tracer.error(
@@ -1434,10 +1425,13 @@ class sapNetweaverProviderCheck(ProviderCheck):
             # initialize a client for the first healthy MessageServer instance we find
             client = self.providerInstance.getRfcClient(logTag=self.logTag)
 
+            # initialie timezone data for utc offset fetched from SAP server
+            sapServerTimeZone = self.providerInstance.getRfcServerTimeZone()
+
             # update logging prefix with the specific instance details of the client
             sapHostnameStr = "%s|%s" % (client.Hostname, client.InstanceNr)
 
-            self.lastResult = client.getEnqueueReadMetrics(logTag=self.logTag)
+            self.lastResult = client.getEnqueueReadMetrics(logTag=self.logTag, serverTimeZone=sapServerTimeZone)
 
             self.tracer.info("%s successfully queried ENQUEUE_READ metrics for %s [%d ms]", 
                              self.logTag, sapHostnameStr, TimeUtils.getElapsedMilliseconds(latencyStartTime))

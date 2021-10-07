@@ -14,7 +14,6 @@ SOAP_CLIENT_CACHE_EXPIRATIION = timedelta(minutes=10)
 ##########
 # Abstract base class to represent interface for querying Server/System time from SAP system
 ##########
-
 class ServerTimeClientBase(ABC):
 
     def __init__(self, tracer: logging.Logger):
