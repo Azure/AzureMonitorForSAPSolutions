@@ -10,6 +10,13 @@ RUN curl https://packages.microsoft.com/config/debian/10/prod.list > /etc/apt/so
 RUN apt-get update -y
 RUN apt-get upgrade -y
 RUN apt-get install git -y
+
+RUN apt-get install wget -y
+RUN wget http://archive.ubuntu.com/ubuntu/pool/main/g/glibc/multiarch-support_2.27-3ubuntu1.2_amd64.deb
+RUN dpkg -i multiarch-support_2.27-3ubuntu1.2_amd64.deb
+RUN apt-get install libodbc1 -y
+RUN apt-get install odbcinst1debian2 -y
+
 RUN apt-get install git gcc libffi-dev g++ unixodbc-dev -y
 RUN pip3 install --upgrade pip
 RUN pip3 install msrestazure==0.6.4 hdbcli azure-storage==0.36.0 azure_storage_logging azure-mgmt-storage==16.0.0 azure-keyvault-secrets azure-identity prometheus_client retry pyodbc pandas zeep
